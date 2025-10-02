@@ -23,6 +23,10 @@ on:
 
 permissions: {} # none
 
+env:
+  ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+  ANDROID_NDK_LATEST_HOME: /usr/local/lib/android/sdk/ndk/25.2.9519653
+  
 jobs:
   build:
     permissions:
@@ -37,6 +41,25 @@ jobs:
       uses: dbhi/qus/action@main
       with:
         targets: arm aarch64
+
+    - name: Find and set NDK path
+      run: |
+        # 查找最新的 NDK 版本
+        NDK_BASE="$ANDROID_SDK_ROOT/ndk"
+        if [ -d "$NDK_BASE" ]; then
+          LATEST_NDK=$(ls -1 "$NDK_BASE" | sort -V | tail -n1)
+          if [ -n "$LATEST_NDK" ]; then
+            echo "ANDROID_NDK_LATEST_HOME=$NDK_BASE/$LATEST_NDK" >> $GITHUB_ENV
+            echo "Found NDK: $NDK_BASE/$LATEST_NDK"
+          else
+            echo "❌ No NDK found in $NDK_BASE"
+            exit 1
+          fi
+        else
+          echo "❌ NDK directory does not exist: $NDK_BASE"
+          exit 1
+        fi
+
     - name: Clone repository
       uses: actions/checkout@v4
       with:
