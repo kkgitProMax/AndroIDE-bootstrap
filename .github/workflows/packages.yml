@@ -2,13 +2,7 @@ name: Packages
 
 on:
   push:
-    branches:
-    - master
-    - main
-    - dev
-    - 'dev/**'
     paths:
-    - '.github/**'
     - 'packages/**'
     - 'root-packages/**'
     - 'x11-packages/**'
@@ -22,7 +16,7 @@ on:
       packages:
         description: "A space-separated names of packages selected for rebuilding"
         default: zip
-        required: false
+        required: true
 
 permissions: {} # none
 
@@ -69,6 +63,7 @@ jobs:
         fetch-depth: 1000
     - name: Gather build summary
       run: |
+        echo "event_name=${{ github.event_name }}"
         if [ "${{ github.event_name }}" != "workflow_dispatch" ]; then
           BASE_COMMIT=$(jq --raw-output .pull_request.base.sha "$GITHUB_EVENT_PATH")
           OLD_COMMIT=$(jq --raw-output .commits[0].id "$GITHUB_EVENT_PATH")
@@ -179,6 +174,12 @@ jobs:
             sort ./deleted_${repo}_packages.txt | uniq > ./deleted_${repo}_packages.txt.tmp
             mv ./deleted_${repo}_packages.txt.tmp ./deleted_${repo}_packages.txt
           fi
+        done
+
+        echo ======== package lists after parsing ========
+        for repo in $(jq -r 'del(.pkg_format)|.[].name' repo.json); do
+          echo "repo=$repo"
+          cat ./built_${repo}_packages.txt 2>/dev/null || echo "  (empty)"
         done
 
     - name: Lint packages
