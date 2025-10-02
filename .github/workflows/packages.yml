@@ -4,9 +4,11 @@ on:
   push:
     branches:
     - master
+    - main
     - dev
     - 'dev/**'
     paths:
+    - '.github/**'
     - 'packages/**'
     - 'root-packages/**'
     - 'x11-packages/**'
@@ -19,6 +21,7 @@ on:
     inputs:
       packages:
         description: "A space-separated names of packages selected for rebuilding"
+        default: zip
         required: true
 
 permissions: {} # none
