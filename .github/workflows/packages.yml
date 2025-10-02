@@ -223,7 +223,6 @@ jobs:
         declare -a packages
         for repo_path in $(jq --raw-output 'del(.pkg_format) | keys | .[]' repo.json); do
           repo=$(jq --raw-output '.["'${repo_path}'"].name' repo.json)
-
           if [ -f ./built_${repo}_packages.txt ]; then
             packages="$packages $(cat ./built_${repo}_packages.txt | tr '\n' ' ')"
           fi
@@ -231,11 +230,14 @@ jobs:
     
         if [ ! -z "$packages" ]; then
           if grep -qP "(^|\\s)${packages// /($|\\s)|(^|\\s)}($|\\s)" ./scripts/big-pkgs.list; then
-            NDK=$ANDROID_NDK_LATEST_HOME ANDROID_HOME=$ANDROID_SDK_ROOT ./build-package.sh -I -a ${{ matrix.target_arch }} $packages
+            NDK=$ANDROID_NDK_LATEST_HOME ANDROID_HOME=$ANDROID_SDK_ROOT \
+              ./build-package.sh -I -a ${{ matrix.target_arch }} $packages
           else
-            # pass param in Docker
-            ./scripts/run-docker.sh -e ANDROID_NDK_LATEST_HOME=$ANDROID_NDK_LATEST_HOME \
-              -e ANDROID_HOME=$ANDROID_SDK_ROOT \
+            # inject params to docker
+            docker exec \
+              --env ANDROID_NDK_LATEST_HOME=$ANDROID_NDK_LATEST_HOME \
+              --env ANDROID_HOME=$ANDROID_SDK_ROOT \
+              --interactive --tty termux-package-builder \
               ./build-package.sh -I -a ${{ matrix.target_arch }} $packages
           fi
         fi
