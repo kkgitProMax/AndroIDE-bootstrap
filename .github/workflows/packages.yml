@@ -248,30 +248,46 @@ jobs:
           fi
         fi
 
+    - name: 🔍 Debug - list actually built .deb
+      if: always()
+      run: |
+        echo ======= built package lists =======
+        cat ./built_*_packages.txt || true
+        echo ======= find any .deb =======
+        find . -type f -name '*.deb' -o -name '*-static*.deb' | head -20
+        echo ======= debs folder content =======
+        ls -lh debs/
+
     - name: Generate build artifacts
       if: always()
       run: |
-        test -d termux-packages/output && mv termux-packages/output/* ./output/
+        # 1. 确保输出目录存在
+        mkdir -p output artifacts
 
-        for repo in $(jq --raw-output 'del(.pkg_format) | .[].name' repo.json); do
-          # Put package lists into directory with *.deb files so they will be transferred to
-          # upload job.
-          test -f ./built_${repo}_packages.txt && mv ./built_${repo}_packages.txt ./debs/
-          test -f ./built_${repo}_subpackages.txt && cat ./built_${repo}_subpackages.txt >> ./debs/built_${repo}_packages.txt \
-            && rm ./built_${repo}_subpackages.txt
-          test -f ./deleted_${repo}_packages.txt && mv ./deleted_${repo}_packages.txt ./debs/
+        # 2. 把两种可能位置的 .deb 全部集中到 ./debs
+        #    Docker 构建输出
+        if [ -d termux-packages/output ]; then
+          find termux-packages/output -type f \( -name "*.deb" -o -name "*-static*.deb" \) -exec mv -t debs/ {} +
+        fi
+        #    本地构建输出
+        if [ -d output ]; then
+          find output -type f \( -name "*.deb" -o -name "*-static*.deb" \) -exec mv -t debs/ {} +
+        fi
 
-          # Move only debs from built_packages into debs/ folder before
-          # creating an archive.
-          while read -r pkg; do
-            # Match both $pkg.deb and $pkg-static.deb.
-            find output \( -name "$pkg_*.deb" -o -name "$pkg-static_*.deb" \) -type f -print0 | xargs -0r mv -t debs/
-          done < <(cat ./debs/built_${repo}_packages.txt)
+        # 3. 把包名列表也放进 debs/ 方便上传
+        for repo in $(jq -r 'del(.pkg_format) | .[].name' repo.json); do
+          [ -f built_${repo}_packages.txt ] && mv built_${repo}_packages.txt debs/
+          [ -f built_${repo}_subpackages.txt ] && cat built_${repo}_subpackages.txt >> debs/built_${repo}_packages.txt && rm -f built_${repo}_subpackages.txt
+          [ -f deleted_${repo}_packages.txt ] && mv deleted_${repo}_packages.txt debs/
         done
 
-        # Files containing certain symbols (e.g. ":") will cause failure in actions/upload-artifact.
-        # Archiving *.deb files in a tarball to avoid issues with uploading.
-        tar cf artifacts/debs-${{ matrix.target_arch }}-${{ github.sha }}.tar debs
+        # 4. 再次确认
+        echo "====== final debs/ ======"
+        ls -lh debs/
+
+        # 5. 打包
+        tar -C debs -cf artifacts/debs-${{ matrix.target_arch }}-${{ github.sha }}.tar .
+        
     - name: Checksums for built *.deb files
       if: always()
       run: |
@@ -281,7 +297,8 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: debs-${{ matrix.target_arch }}-${{ github.sha }}
-        path: ./artifacts
+        #path: ./artifacts
+        path: artifacts/debs-${{ matrix.target_arch }}-${{ github.sha }}.tar
 
   upload:
     concurrency: ${{ github.workflow }}
